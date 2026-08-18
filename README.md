@@ -18,16 +18,24 @@ External enhancement suite for Counter-Strike 2 featuring ESP overlay, aimbot, t
   <img src="/assets/tXZT1Ve2.webp" alt="NERON DearPyGui control panel preview" width="720">
 </p>
 
+## Requirements
+
+NERON is a **Windows-only** project. Run it on a supported 64-bit Windows environment with a compatible Python installation. The code imports Windows APIs through `pywin32`, so startup on Linux or macOS is not supported. The project also requires a locally running Counter-Strike 2 session; without it, the connector intentionally waits for `cs2.exe` and `client.dll`.
+
 ## Quick Start
-```bash
-python -m venv .venv
-.venv\Scripts\activate
-pip install -r requirements.txt
-pip install pyMeow
+```powershell
+py -m venv .venv
+.\.venv\Scripts\Activate.ps1
+python -m pip install --upgrade pip
+python -m pip install -r requirements.txt
+python main.py
 ```
+
 1. Launch CS2 and join a session.
-2. Run `python main.py` (recommended with admin privileges).
-3. NERON waits for `cs2.exe`/`client.dll`, then spawns the GUI, overlay, and worker threads.
+2. Run `python main.py` from the repository root. Administrator privileges may be required by the platform APIs.
+3. NERON waits for `cs2.exe`/`client.dll`, then starts the GUI, overlay, and worker threads.
+
+Settings are stored as `settings.json` alongside `main.py`, regardless of the directory from which the command is launched. Existing settings files are merged with newly introduced default settings so upgrades do not fail because a key is missing.
 
 ## Hotkeys
 - `End` — terminate NERON.

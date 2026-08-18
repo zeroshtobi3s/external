@@ -1,5 +1,5 @@
 import globals
-from functions import memfuncs
+from functions import config_store
 from functions import logutil
 
 from features import aimbot
@@ -23,42 +23,34 @@ import serial
 import serial.tools.list_ports
 
 import win32con, win32process, win32api
-import keyboard, os, json
+import keyboard, os
 
 from functions.process_watcher import ProcessConnector
 
-keyboard.add_hotkey("end", callback=lambda: os._exit(0))
-keyboard.add_hotkey("insert", callback=lambda: gui_util.hide_dpg())
-keyboard.add_hotkey("home", callback=lambda: gui_util.streamproof_toggle())
-
-
 import threading
 
+
+def register_hotkeys():
+    keyboard.add_hotkey("end", callback=lambda: os._exit(0))
+    keyboard.add_hotkey("insert", callback=gui_util.hide_dpg)
+    keyboard.add_hotkey("home", callback=gui_util.streamproof_toggle)
+
+
 def SaveConfig(options):
-    try:
-        with open(globals.SAVE_FILE, 'w') as fp:
-            json.dump(dict(options), fp, indent=4)
-    except Exception:
-        pass
+    return config_store.save_settings(options, globals.SAVE_FILE)
+
 
 def LoadConfig():
-    if not os.path.exists(globals.SAVE_FILE):
-        with open(globals.SAVE_FILE, "w") as fp:
-            json.dump(globals.CHEAT_SETTINGS, fp, indent=4)
-    else:
-        try:
-            with open(globals.SAVE_FILE, "r") as fp:
-                globals.CHEAT_SETTINGS = json.load(fp)
-        except Exception:
-            pass
+    loaded_settings = config_store.load_settings(globals.CHEAT_SETTINGS, globals.SAVE_FILE)
+    globals.CHEAT_SETTINGS.clear()
+    globals.CHEAT_SETTINGS.update(loaded_settings)
 
 def ConfigSaverThread(shared_dict):
     last_saved = None
     while True:
         try:
             current = dict(shared_dict)
-            if current != last_saved:
-                SaveConfig(current)
+            if current != last_saved and SaveConfig(current):
                 last_saved = current
         except Exception:
             pass
@@ -66,6 +58,7 @@ def ConfigSaverThread(shared_dict):
 
 
 if __name__ == "__main__":
+    register_hotkeys()
 
     print(" _   _ ______ _____   ____  _   _ \n| \\ | |  ____|  __ \\ / __ \\| \\ | |\n|  \\| | |__  | |__) | |  | |  \\| |\n| . ` |  __| |  _  /| |  | | . ` |\n| |\\  | |____| | \\ \\| |__| | |\\  |\n|_| \\_|______|_|  \\_\\\\____/|_| \\_|\n\n             - NERON v1.0\n             - developed by khorami.dev\n             - https://github.com/SadraKhorami/cs2_neron_external")
 
@@ -105,8 +98,7 @@ if __name__ == "__main__":
     SharedOffsets.offset = globals.GAME_OFFSETS
 
     SharedRuntime = SimpleState()
-    SharedRuntime.spectators = []  
-    SharedOptions["EnableShowSpectators"] = True
+    SharedRuntime.spectators = []
 
     GUI_thread = threading.Thread(target=gui_mainloop.run_gui, args=(SharedOptions, SharedRuntime,), daemon=True)
     GUI_thread.start()
