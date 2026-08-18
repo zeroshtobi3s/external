@@ -1,7 +1,8 @@
-from functions import memfuncs
-from functions import logutil
-from functions.process_watcher import ProcessConnector
 import time
+
+from functions import logutil, memfuncs
+from functions.process_watcher import ProcessConnector
+
 
 def BombTimerThread(SharedBombState, SharedOffsets):
     connector = ProcessConnector("cs2.exe", modules=["client.dll"])

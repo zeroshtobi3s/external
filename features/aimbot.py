@@ -1,244 +1,345 @@
-import logging
-import pymem
-from ext.datatypes import *
-from functions import memfuncs, calculations, gameinput
-import globals
 import time
 
+import pymem
+
+import globals
+from ext.datatypes import Entity, Vector2, Vector3
+from functions import (
+    aim_settings,
+    calculations,
+    entity_list,
+    gameinput,
+    logutil,
+    memfuncs,
+)
+
+
 def is_valid_address(address):
-	return address is not None and 0x10000 < address < 0x7FFFFFFFFFFF
+    return address is not None and 0x10000 < address < 0x7FFFFFFFFFFF
+
 
 def GetPlayers(processHandle, clientBaseAddress, LocalPlayer, AimBoneID, Options, Offsets):
-	entities = []
-	try:
-		EntityList = memfuncs.ProcMemHandler.ReadPointer(processHandle, clientBaseAddress + Offsets.offset.dwEntityList)
-	except Exception as e:
-		return entities
+    entities = []
+    try:
+        entity_list_address = memfuncs.ProcMemHandler.ReadPointer(
+            processHandle, clientBaseAddress + Offsets.offset.dwEntityList
+        )
+    except pymem.exception.MemoryReadError as error:
+        logutil.debug(f"[aimbot] could not read entity list: {error}")
+        return entities
 
-	for i in range(64):
-		try:
-			tempEntity = Entity()
+    for index in range(1, 65):
+        try:
+            entity = Entity()
+            chunk_address = entity_list.entity_list_chunk_address(entity_list_address, index)
+            chunk = memfuncs.ProcMemHandler.ReadPointer(processHandle, chunk_address)
+            if not is_valid_address(chunk):
+                continue
 
-			ListEntry = memfuncs.ProcMemHandler.ReadPointer(processHandle, EntityList + (8 * (i & 0x7FFF) >> 9) + 16)
-			if not is_valid_address(ListEntry):
-				continue
+            controller = memfuncs.ProcMemHandler.ReadPointer(
+                processHandle, entity_list.entity_slot_address(chunk, index)
+            )
+            if not is_valid_address(controller):
+                continue
 
-			currentController = memfuncs.ProcMemHandler.ReadPointer(processHandle, ListEntry + 112 * (i & 0x1FF))
-			if not is_valid_address(currentController):
-				continue
+            pawn_handle = memfuncs.ProcMemHandler.ReadInt(
+                processHandle, controller + Offsets.offset.m_hPlayerPawn
+            )
+            if not pawn_handle:
+                continue
 
-			pawnHandle = memfuncs.ProcMemHandler.ReadInt(processHandle, currentController + Offsets.offset.m_hPlayerPawn)
-			if pawnHandle == 0:
-				continue
+            pawn_chunk = memfuncs.ProcMemHandler.ReadPointer(
+                processHandle,
+                entity_list.entity_list_chunk_address(entity_list_address, pawn_handle),
+            )
+            if not is_valid_address(pawn_chunk):
+                continue
 
-			ListEntry2 = memfuncs.ProcMemHandler.ReadPointer(processHandle, EntityList + 0x8 * ((pawnHandle & 0x7FFF) >> 9) + 0x10)
-			if not is_valid_address(ListEntry2):
-				continue
+            pawn = memfuncs.ProcMemHandler.ReadPointer(
+                processHandle, entity_list.entity_slot_address(pawn_chunk, pawn_handle)
+            )
+            if not is_valid_address(pawn) or pawn == LocalPlayer.pawnAddress:
+                continue
 
-			currentPawn = memfuncs.ProcMemHandler.ReadPointer(processHandle, ListEntry2 + 0x70 * (pawnHandle & 0x1FF))
-			if not is_valid_address(currentPawn) or currentPawn == LocalPlayer.pawnAddress:
-				continue
+            scene_node = memfuncs.ProcMemHandler.ReadPointer(
+                processHandle, pawn + Offsets.offset.m_pGameSceneNode
+            )
+            if not is_valid_address(scene_node):
+                continue
+            bone_matrix = memfuncs.ProcMemHandler.ReadPointer(
+                processHandle, scene_node + Offsets.offset.m_modelState + 0x80
+            )
+            if not is_valid_address(bone_matrix):
+                continue
 
-			sceneNode = memfuncs.ProcMemHandler.ReadPointer(processHandle, currentPawn + Offsets.offset.m_pGameSceneNode)
-			boneMatrix = memfuncs.ProcMemHandler.ReadPointer(processHandle, sceneNode + Offsets.offset.m_modelState + 0x80)
-			tempEntity.HeadPos = memfuncs.ProcMemHandler.ReadVec(processHandle, boneMatrix + (AimBoneID * 32))
-			tempEntity.origin = memfuncs.ProcMemHandler.ReadVec(processHandle, currentPawn + Offsets.offset.m_vOldOrigin)
+            entity.HeadPos = memfuncs.ProcMemHandler.ReadVec(
+                processHandle, bone_matrix + AimBoneID * 32
+            )
+            entity.origin = memfuncs.ProcMemHandler.ReadVec(
+                processHandle, pawn + Offsets.offset.m_vOldOrigin
+            )
+            view_matrix = memfuncs.ProcMemHandler.ReadMatrix(
+                processHandle, clientBaseAddress + Offsets.offset.dwViewMatrix
+            )
+            entity.head2d = calculations.world_to_screen(view_matrix, entity.HeadPos)
+            entity.pixelDistance = calculations.distance_vec2(
+                entity.head2d,
+                Vector2(globals.SCREEN_WIDTH / 2, globals.SCREEN_HEIGHT / 2),
+            )
+            if entity.pixelDistance >= Options["AimbotFOV"]:
+                continue
 
-			ViewMatrix = memfuncs.ProcMemHandler.ReadMatrix(processHandle, clientBaseAddress + Offsets.offset.dwViewMatrix)
-			tempEntity.head2d = calculations.world_to_screen(ViewMatrix, tempEntity.HeadPos)
+            entity.Distance = calculations.distance_vec3(entity.origin, LocalPlayer.origin)
+            life_state = memfuncs.ProcMemHandler.ReadInt(
+                processHandle, pawn + Offsets.offset.m_lifeState
+            )
+            spotted = memfuncs.ProcMemHandler.ReadInt(
+                processHandle,
+                pawn + Offsets.offset.m_entitySpottedState + Offsets.offset.m_bSpotted,
+            )
+            team = memfuncs.ProcMemHandler.ReadInt(
+                processHandle, pawn + Offsets.offset.m_iTeamNum
+            )
 
-			ScreenVec = Vector2(globals.SCREEN_WIDTH / 2, globals.SCREEN_HEIGHT / 2)
-			tempEntity.pixelDistance = calculations.distance_vec2(tempEntity.head2d, ScreenVec)
+            if Options["EnableAimbotVisibilityCheck"] and not spotted:
+                continue
+            if life_state != 256:
+                continue
+            if Options["EnableAimbotTeamCheck"] and LocalPlayer.Team == team:
+                continue
 
-			if tempEntity.pixelDistance >= Options["AimbotFOV"]:
-				continue
+            entities.append(entity)
+        except pymem.exception.MemoryReadError as error:
+            logutil.debug(f"[aimbot] entity {index} memory read failed: {error}")
+        except (TypeError, ValueError, AttributeError) as error:
+            logutil.debug(f"[aimbot] entity {index} data was invalid: {error}")
 
-			tempEntity.Distance = calculations.distance_vec3(tempEntity.origin, LocalPlayer.origin)
+    return entities
 
-			lifestate = memfuncs.ProcMemHandler.ReadInt(processHandle, currentPawn + Offsets.offset.m_lifeState)
-			spotted = memfuncs.ProcMemHandler.ReadInt(processHandle, currentPawn + Offsets.offset.m_entitySpottedState + Offsets.offset.m_bSpotted)
-			team = memfuncs.ProcMemHandler.ReadInt(processHandle, currentPawn + Offsets.offset.m_iTeamNum)
 
-			if Options["EnableAimbotVisibilityCheck"] and not spotted:
-				continue
-			if lifestate != 256:  
-				continue
-			if Options["EnableAimbotTeamCheck"] and LocalPlayer.Team == team:
-				continue
-
-			entities.append(tempEntity)
-
-		except pymem.exception.MemoryReadError as e:
-			logging.debug(f"[Player {i}] Memory read failed: {e}")
-			continue
-		except Exception as e:
-			logging.error(f"[Player {i}] Unexpected error: {e}")
-			continue
-
-	return entities
-
-def ResolveBoneToID(selectedIndex):
-	match selectedIndex:
-		case 0: 
-			return PLAYER_BONES["head"]
-		case 1: 
-			return PLAYER_BONES["seck_0"]
-		case 2: 
-			return PLAYER_BONES["spine_2"]
-		case 3: 
-			return PLAYER_BONES["leg_lower_L"]
-		case _:
-			return PLAYER_BONES["head"]
+def ResolveBoneToID(selected_position):
+    """Compatibility wrapper for callers using the legacy function name."""
+    return aim_settings.resolve_aim_bone_id(selected_position)
 
 
 _last_update_time = time.perf_counter()
+
+
 def Aimbot_Update(processHandle, clientBaseAddress, Offsets, Options, ARDUINO_HANDLE):
-	m_flIntervalPerTick = 0.015625
-	global _last_update_time
-	try:
+    tick_interval = 0.015625
+    global _last_update_time
 
-		current_time = time.perf_counter()
-		frame_time = current_time - _last_update_time
-		_last_update_time = current_time
+    try:
+        current_time = time.perf_counter()
+        frame_time = current_time - _last_update_time
+        _last_update_time = current_time
 
-		localPawn = memfuncs.ProcMemHandler.ReadPointer(processHandle, clientBaseAddress + Offsets.offset.dwLocalPlayerPawn)
-		localController = memfuncs.ProcMemHandler.ReadPointer(processHandle, clientBaseAddress + Offsets.offset.dwLocalPlayerController)
-		localTeam = memfuncs.ProcMemHandler.ReadInt(processHandle, localPawn + Offsets.offset.m_iTeamNum)
-		localOrigin = memfuncs.ProcMemHandler.ReadVec(processHandle, localPawn + Offsets.offset.m_vOldOrigin)
-		localView = memfuncs.ProcMemHandler.ReadVec(processHandle, localPawn + Offsets.offset.m_vecViewOffset)
-		viewMatrix = memfuncs.ProcMemHandler.ReadMatrix(processHandle, clientBaseAddress + Offsets.offset.dwViewMatrix)
-		entityList = memfuncs.ProcMemHandler.ReadPointer(processHandle, clientBaseAddress + Offsets.offset.dwEntityList)
+        local_pawn = memfuncs.ProcMemHandler.ReadPointer(
+            processHandle, clientBaseAddress + Offsets.offset.dwLocalPlayerPawn
+        )
+        local_controller = memfuncs.ProcMemHandler.ReadPointer(
+            processHandle, clientBaseAddress + Offsets.offset.dwLocalPlayerController
+        )
+        if not is_valid_address(local_pawn) or not is_valid_address(local_controller):
+            return
 
-		AimBoneID = ResolveBoneToID(Options["AimPosition"])
-		bestEntity2D = None
-		bestEntity3D = None
-		bestMetric = float("inf")
-		from features.esp.visibility import resolve_local_index
-		localIndex = resolve_local_index(processHandle, entityList, localController)
+        local_team = memfuncs.ProcMemHandler.ReadInt(
+            processHandle, local_pawn + Offsets.offset.m_iTeamNum
+        )
+        local_origin = memfuncs.ProcMemHandler.ReadVec(
+            processHandle, local_pawn + Offsets.offset.m_vOldOrigin
+        )
+        local_view = memfuncs.ProcMemHandler.ReadVec(
+            processHandle, local_pawn + Offsets.offset.m_vecViewOffset
+        )
+        view_matrix = memfuncs.ProcMemHandler.ReadMatrix(
+            processHandle, clientBaseAddress + Offsets.offset.dwViewMatrix
+        )
+        entity_list_address = memfuncs.ProcMemHandler.ReadPointer(
+            processHandle, clientBaseAddress + Offsets.offset.dwEntityList
+        )
+        if not is_valid_address(entity_list_address):
+            return
 
-		for i in range(64):
-			try:
-				listEntry = memfuncs.ProcMemHandler.ReadPointer(processHandle, entityList + (8 * (i & 0x7FFF) >> 9) + 16)
-				if not is_valid_address(listEntry):
-					continue
+        aim_bone_id = ResolveBoneToID(Options.get("AimPosition", "Head"))
+        best_entity_2d = None
+        best_entity_3d = None
+        best_metric = float("inf")
 
-				controller = memfuncs.ProcMemHandler.ReadPointer(processHandle, listEntry + 112 * (i & 0x1FF))
-				if not is_valid_address(controller):
-					continue
+        from features.esp.visibility import resolve_local_index
 
-				pawnHandle = memfuncs.ProcMemHandler.ReadInt(processHandle, controller + Offsets.offset.m_hPlayerPawn)
-				if pawnHandle == 0:
-					continue
+        local_index = resolve_local_index(
+            processHandle, entity_list_address, local_controller
+        )
 
-				listEntry2 = memfuncs.ProcMemHandler.ReadPointer(processHandle, entityList + 0x8 * ((pawnHandle & 0x7FFF) >> 9) + 0x10)
-				if not is_valid_address(listEntry2):
-					continue
+        for index in range(1, 65):
+            try:
+                chunk = memfuncs.ProcMemHandler.ReadPointer(
+                    processHandle,
+                    entity_list.entity_list_chunk_address(entity_list_address, index),
+                )
+                if not is_valid_address(chunk):
+                    continue
 
-				pawn = memfuncs.ProcMemHandler.ReadPointer(processHandle, listEntry2 + 0x70 * (pawnHandle & 0x1FF))
-				if not is_valid_address(pawn) or pawn == localPawn:
-					continue
+                controller = memfuncs.ProcMemHandler.ReadPointer(
+                    processHandle, entity_list.entity_slot_address(chunk, index)
+                )
+                if not is_valid_address(controller):
+                    continue
 
-				lifestate = memfuncs.ProcMemHandler.ReadInt(processHandle, pawn + Offsets.offset.m_lifeState)
-				if lifestate != 256:
-					continue
+                pawn_handle = memfuncs.ProcMemHandler.ReadInt(
+                    processHandle, controller + Offsets.offset.m_hPlayerPawn
+                )
+                if not pawn_handle:
+                    continue
 
-				team = memfuncs.ProcMemHandler.ReadInt(processHandle, pawn + Offsets.offset.m_iTeamNum)
-				if Options["EnableAimbotTeamCheck"] and team == localTeam:
-					continue
+                pawn_chunk = memfuncs.ProcMemHandler.ReadPointer(
+                    processHandle,
+                    entity_list.entity_list_chunk_address(entity_list_address, pawn_handle),
+                )
+                if not is_valid_address(pawn_chunk):
+                    continue
 
-				if Options["EnableAimbotVisibilityCheck"] and localIndex > 0:
-					spotted_mask = memfuncs.ProcMemHandler.ReadInt(processHandle, pawn + Offsets.offset.m_entitySpottedState + Offsets.offset.m_bSpottedByMask)
-					if not (spotted_mask & (1 << (localIndex - 1))) and not (spotted_mask & (1 << localIndex)):
-						continue
+                pawn = memfuncs.ProcMemHandler.ReadPointer(
+                    processHandle, entity_list.entity_slot_address(pawn_chunk, pawn_handle)
+                )
+                if not is_valid_address(pawn) or pawn == local_pawn:
+                    continue
 
-				sceneNode = memfuncs.ProcMemHandler.ReadPointer(processHandle, pawn + Offsets.offset.m_pGameSceneNode)
-				boneMatrix = memfuncs.ProcMemHandler.ReadPointer(processHandle, sceneNode + Offsets.offset.m_modelState + 0x80)
-				headPos = memfuncs.ProcMemHandler.ReadVec(processHandle, boneMatrix + (AimBoneID * 32))
-				origin = memfuncs.ProcMemHandler.ReadVec(processHandle, pawn + Offsets.offset.m_vOldOrigin)
+                life_state = memfuncs.ProcMemHandler.ReadInt(
+                    processHandle, pawn + Offsets.offset.m_lifeState
+                )
+                if life_state != 256:
+                    continue
 
-				if Options["EnableAimbotPrediction"]:
-					ticks_passed = frame_time / m_flIntervalPerTick
-					base_ticks_to_predict = 3.55
-					ticks_to_predict = base_ticks_to_predict + max(0.0, ticks_passed)
-					
-					prediction_time = m_flIntervalPerTick * ticks_to_predict
-					target_vel = memfuncs.ProcMemHandler.ReadVec(processHandle, pawn + Offsets.offset.m_vecVelocity)
-					local_vel = memfuncs.ProcMemHandler.ReadVec(processHandle, localPawn + Offsets.offset.m_vecVelocity)
-					relative_vel = Vector3(
-						target_vel.x - local_vel.x,
-						target_vel.y - local_vel.y,
-						target_vel.z - local_vel.z
-					)
-					headPos = Vector3(
-						headPos.x + relative_vel.x * prediction_time,
-						headPos.y + relative_vel.y * prediction_time,
-						headPos.z + relative_vel.z * prediction_time
-					)
+                team = memfuncs.ProcMemHandler.ReadInt(
+                    processHandle, pawn + Offsets.offset.m_iTeamNum
+                )
+                if Options.get("EnableAimbotTeamCheck", False) and team == local_team:
+                    continue
 
-				head2d = calculations.world_to_screen(viewMatrix, headPos)
-				if head2d.x <= -1 or head2d.y <= -1:
-					continue
+                if Options.get("EnableAimbotVisibilityCheck", False) and local_index > 0:
+                    spotted_mask = memfuncs.ProcMemHandler.ReadInt(
+                        processHandle,
+                        pawn
+                        + Offsets.offset.m_entitySpottedState
+                        + Offsets.offset.m_bSpottedByMask,
+                    )
+                    if not (
+                        spotted_mask & (1 << (local_index - 1))
+                        or spotted_mask & (1 << local_index)
+                    ):
+                        continue
 
-				screenCenter = Vector2(globals.SCREEN_WIDTH / 2, globals.SCREEN_HEIGHT / 2)
-				pixelDist = calculations.distance_vec2(head2d, screenCenter)
-				if pixelDist >= Options["AimbotFOV"]:
-					continue
+                scene_node = memfuncs.ProcMemHandler.ReadPointer(
+                    processHandle, pawn + Offsets.offset.m_pGameSceneNode
+                )
+                if not is_valid_address(scene_node):
+                    continue
+                bone_matrix = memfuncs.ProcMemHandler.ReadPointer(
+                    processHandle, scene_node + Offsets.offset.m_modelState + 0x80
+                )
+                if not is_valid_address(bone_matrix):
+                    continue
 
-				entityDist = calculations.distance_vec3(origin, localOrigin)
-				totalMetric = pixelDist + entityDist
+                head_position = memfuncs.ProcMemHandler.ReadVec(
+                    processHandle, bone_matrix + aim_bone_id * 32
+                )
+                origin = memfuncs.ProcMemHandler.ReadVec(
+                    processHandle, pawn + Offsets.offset.m_vOldOrigin
+                )
 
-				if totalMetric < bestMetric:
-					bestMetric = totalMetric
-					bestEntity2D = head2d
-					bestEntity3D = headPos
+                if Options.get("EnableAimbotPrediction", False):
+                    prediction_time = tick_interval * (3.55 + max(0.0, frame_time / tick_interval))
+                    target_velocity = memfuncs.ProcMemHandler.ReadVec(
+                        processHandle, pawn + Offsets.offset.m_vecVelocity
+                    )
+                    local_velocity = memfuncs.ProcMemHandler.ReadVec(
+                        processHandle, local_pawn + Offsets.offset.m_vecVelocity
+                    )
+                    head_position = Vector3(
+                        head_position.x
+                        + (target_velocity.x - local_velocity.x) * prediction_time,
+                        head_position.y
+                        + (target_velocity.y - local_velocity.y) * prediction_time,
+                        head_position.z
+                        + (target_velocity.z - local_velocity.z) * prediction_time,
+                    )
 
-			except Exception as e:
-				logging.debug(f"[Entity {i}] Read failed: {e}")
-				continue
+                head_2d = calculations.world_to_screen(view_matrix, head_position)
+                if head_2d.x <= -1 or head_2d.y <= -1:
+                    continue
 
-		if bestEntity2D is not None and bestEntity3D is not None:
-			cameraOrigin = localOrigin + localView
-			newAngles = calculations.calculate_angles(cameraOrigin, bestEntity3D)
+                pixel_distance = calculations.distance_vec2(
+                    head_2d,
+                    Vector2(globals.SCREEN_WIDTH / 2, globals.SCREEN_HEIGHT / 2),
+                )
+                if pixel_distance >= Options.get("AimbotFOV", 75):
+                    continue
 
-			shotsFired = memfuncs.ProcMemHandler.ReadInt(processHandle, localPawn + Offsets.offset.m_iShotsFired)
-			if shotsFired > 1 and Options["EnableRecoilControl"]:
-				globals.RCS_CTRL_BY_AIMBOT = True
-				aimPunchServices = memfuncs.ProcMemHandler.ReadPointer(processHandle, localPawn + Offsets.offset.m_pAimPunchServices)
-				if aimPunchServices:
-					punch_x = memfuncs.ProcMemHandler.ReadFloat(processHandle, aimPunchServices + Offsets.offset.m_aimPunchAngle)
-					punch_y = memfuncs.ProcMemHandler.ReadFloat(processHandle, aimPunchServices + Offsets.offset.m_aimPunchAngle + 0x4)
-					punchX = punch_x * 12.0
-					punchY = punch_y * 12.0
-					recoilSmooth = max(1.0, min(float(Options["RecoilControlSmoothing"]), 3.0))
-					punchX /= recoilSmooth
-					punchY /= recoilSmooth
+                metric = pixel_distance + calculations.distance_vec3(origin, local_origin)
+                if metric < best_metric:
+                    best_metric = metric
+                    best_entity_2d = head_2d
+                    best_entity_3d = head_position
+            except pymem.exception.MemoryReadError as error:
+                logutil.debug(f"[aimbot] entity {index} memory read failed: {error}")
+            except (TypeError, ValueError, AttributeError) as error:
+                logutil.debug(f"[aimbot] entity {index} data was invalid: {error}")
 
-					bestEntity2D.y -= punchX
-					bestEntity2D.x += punchY
+        if best_entity_2d is None or best_entity_3d is None:
+            return
 
-			currentMouse = gameinput.getCurrentMousePosition()
-			crosshairX = globals.SCREEN_WIDTH / 2.0
-			crosshairY = globals.SCREEN_HEIGHT / 2.0
+        shots_fired = memfuncs.ProcMemHandler.ReadInt(
+            processHandle, local_pawn + Offsets.offset.m_iShotsFired
+        )
+        if shots_fired > 1 and Options.get("EnableRecoilControl", False):
+            globals.RCS_CTRL_BY_AIMBOT = True
+            aim_punch_services = memfuncs.ProcMemHandler.ReadPointer(
+                processHandle, local_pawn + Offsets.offset.m_pAimPunchServices
+            )
+            if aim_punch_services:
+                punch_x = memfuncs.ProcMemHandler.ReadFloat(
+                    processHandle, aim_punch_services + Offsets.offset.m_aimPunchAngle
+                )
+                punch_y = memfuncs.ProcMemHandler.ReadFloat(
+                    processHandle, aim_punch_services + Offsets.offset.m_aimPunchAngle + 0x4
+                )
+                recoil_smoothing = max(
+                    1.0,
+                    min(float(Options.get("RecoilControlSmoothing", 1.0)), 3.0),
+                )
+                best_entity_2d.y -= punch_x * 12.0 / recoil_smoothing
+                best_entity_2d.x += punch_y * 12.0 / recoil_smoothing
 
-			sensitivityBase = memfuncs.ProcMemHandler.ReadPointer(processHandle, clientBaseAddress + Offsets.offset.dwSensitivity)
-			sensitivity = memfuncs.ProcMemHandler.ReadFloat(processHandle, sensitivityBase + Offsets.offset.dwSensitivity_sensitivity)
+        current_mouse = gameinput.getCurrentMousePosition()
+        sensitivity_base = memfuncs.ProcMemHandler.ReadPointer(
+            processHandle, clientBaseAddress + Offsets.offset.dwSensitivity
+        )
+        if not is_valid_address(sensitivity_base):
+            return
+        sensitivity = max(
+            0.001,
+            memfuncs.ProcMemHandler.ReadFloat(
+                processHandle,
+                sensitivity_base + Offsets.offset.dwSensitivity_sensitivity,
+            ),
+        )
+        smoothing = max(1.0, float(Options.get("AimbotSmoothing", 1.0)))
+        next_position = Vector2(
+            current_mouse.x
+            + (best_entity_2d.x - globals.SCREEN_WIDTH / 2.0) / sensitivity / smoothing,
+            current_mouse.y
+            + (best_entity_2d.y - globals.SCREEN_HEIGHT / 2.0) / sensitivity / smoothing,
+        )
 
-			deltaX = (bestEntity2D.x - crosshairX) / sensitivity
-			deltaY = (bestEntity2D.y - crosshairY) / sensitivity
-
-			stepFactor = 1.0 / Options["AimbotSmoothing"]
-			moveX = deltaX * stepFactor
-			moveY = deltaY * stepFactor
-
-			nextPos = Vector2(currentMouse.x + moveX, currentMouse.y + moveY)
-
-			if ARDUINO_HANDLE is not None:
-				gameinput.moveMouseToLocationArdunio(nextPos, handle=ARDUINO_HANDLE)
-			else:
-				gameinput.moveMouseToLocation(nextPos)
-		globals.RCS_CTRL_BY_AIMBOT = False
-
-	except pymem.exception.MemoryReadError as e:
-		logging.debug(f"Aimbot Loop MemoryReadError: {e}")
-	except Exception as e:
-		logging.error(f"Aimbot Loop Exception: {e}")
+        if ARDUINO_HANDLE is not None:
+            gameinput.moveMouseToLocationArdunio(next_position, handle=ARDUINO_HANDLE)
+        else:
+            gameinput.moveMouseToLocation(next_position)
+    except pymem.exception.MemoryReadError as error:
+        logutil.debug(f"[aimbot] memory read failed: {error}")
+    except (TypeError, ValueError, AttributeError) as error:
+        logutil.error(f"[aimbot] invalid runtime data: {error}")
+    finally:
+        globals.RCS_CTRL_BY_AIMBOT = False

@@ -1,8 +1,10 @@
 import ctypes
-import time
 import random
+import time
+
 from ext.datatypes import *
 from globals import *
+
 
 def LeftClick():
     time.sleep(random.randint(10, 30) / 1000.0)
@@ -15,9 +17,9 @@ def LeftClickArduino(handle):
         return
     try:
         time.sleep(random.randint(10, 30) / 1000.0)
-        handle.write(f"down\n".encode())
+        handle.write(b"down\n")
         time.sleep(random.randint(10, 50) / 1000.0)
-        handle.write(f"up\n".encode())
+        handle.write(b"up\n")
     except Exception:
         pass
 

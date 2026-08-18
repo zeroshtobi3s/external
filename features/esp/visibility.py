@@ -1,13 +1,18 @@
 from functions import memfuncs
 
+from .entity_list import entity_list_chunk_address, entity_slot_address
+
 
 def resolve_local_index(processHandle, EntityList, local_controller_addr) -> int:
     try:
         for i in range(1, 65):
-            list_entry = memfuncs.ProcMemHandler.ReadPointer(processHandle, EntityList + (8 * (i & 0x7FFF) >> 9) + 16)
+            chunk_address = entity_list_chunk_address(EntityList, i)
+            list_entry = memfuncs.ProcMemHandler.ReadPointer(processHandle, chunk_address)
             if not list_entry:
                 continue
-            controller = memfuncs.ProcMemHandler.ReadPointer(processHandle, list_entry + 112 * (i & 0x1FF))
+            controller = memfuncs.ProcMemHandler.ReadPointer(
+                processHandle, entity_slot_address(list_entry, i)
+            )
             if controller == local_controller_addr:
                 return i
     except Exception:

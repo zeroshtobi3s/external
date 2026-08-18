@@ -1,7 +1,7 @@
-from functions import memfuncs
-from functions import logutil
-from functions.process_watcher import ProcessConnector
 import time
+
+from functions import logutil, memfuncs
+from functions.process_watcher import ProcessConnector
 
 
 def FovChangerThreadFunction(Options, Offsets):

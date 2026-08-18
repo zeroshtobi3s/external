@@ -1,6 +1,8 @@
 import math
+
 from ext.datatypes import *
 from globals import *
+
 
 def distance_vec3(v: Vector3, other: Vector3) -> float:
 	dx = float(v.x) - float(other.x)

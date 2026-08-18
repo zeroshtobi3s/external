@@ -1,6 +1,5 @@
 from dataclasses import dataclass
-from typing import Optional
-from typing import List
+
 
 @dataclass
 class Vector3:
@@ -52,22 +51,22 @@ class Entity:
     Health: int = 100
     Team: int = 0
     Name: str = ""
-    Position: Optional[Vector2] = None
+    Position: Vector2 | None = None
     Bones: dict[str, Vector2] = None
-    HeadPos: Optional[Vector3] = None
+    HeadPos: Vector3 | None = None
     Distance: float = 0.0
-    Rect: Optional[Rectangle] = None
+    Rect: Rectangle | None = None
     OnScreen: bool = False
 
-    pawnAddress: Optional[int] = None
-    controllerAddress: Optional[int] = None
-    origin: Optional[Vector3] = None
-    view: Optional[Vector3] = None
+    pawnAddress: int | None = None
+    controllerAddress: int | None = None
+    origin: Vector3 | None = None
+    view: Vector3 | None = None
     lifestate: int = 0
-    head2d: Optional[Vector2] = None
+    head2d: Vector2 | None = None
     pixelDistance: float = 0.0
 
 
 @dataclass
 class Matrix:
-	matrix: List[List[float]]
+	matrix: list[list[float]]

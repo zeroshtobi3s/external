@@ -1,10 +1,10 @@
 import os
-from typing import Iterable, List, Optional
+from collections.abc import Iterable
 
 DEFAULT_FONT_FILENAME = "inter-semibold.ttf"
 
 
-def _unique_paths(paths: Iterable[str]) -> List[str]:
+def _unique_paths(paths: Iterable[str]) -> list[str]:
     seen = set()
     unique = []
     for path in paths:
@@ -19,8 +19,8 @@ def _unique_paths(paths: Iterable[str]) -> List[str]:
 
 def font_candidates(
     font_filename: str = DEFAULT_FONT_FILENAME,
-    anchors: Optional[Iterable[str]] = None,
-) -> List[str]:
+    anchors: Iterable[str] | None = None,
+) -> list[str]:
     anchors = list(anchors or [])
     candidates = []
 
@@ -48,8 +48,8 @@ def font_candidates(
 
 def locate_font(
     font_filename: str = DEFAULT_FONT_FILENAME,
-    anchors: Optional[Iterable[str]] = None,
-) -> Optional[str]:
+    anchors: Iterable[str] | None = None,
+) -> str | None:
     for cand in font_candidates(font_filename, anchors):
         if os.path.exists(cand):
             return cand

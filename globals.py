@@ -1,7 +1,9 @@
+import ctypes
+from pathlib import Path
+
 import win32api
 import win32gui
-import ctypes
-import os
+
 from ext import offsets
 from ext.datatypes import *
 
@@ -41,7 +43,8 @@ def update_screen_size():
 
 GAME_OFFSETS = offsets.get_offsets()
 
-SAVE_FILE = os.path.join(os.getcwd(), "settings.json")
+PROJECT_DIR = Path(__file__).resolve().parent
+SAVE_FILE = str(PROJECT_DIR / "settings.json")
 
 CHEAT_SETTINGS = {
     "EnableAntiFlashbang": False,

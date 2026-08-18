@@ -1,19 +1,25 @@
-from ext.datatypes import *
-from functions import memfuncs
-from functions import calculations
-from functions import logutil
 import globals
+from ext.datatypes import *
+from functions import calculations, memfuncs
+
 try:
     import pymeow as pme
 except ImportError:
     import pyMeow as pme
 from features import spectator
 
-from .draw import draw_box, draw_skeleton, draw_distance, draw_health_text, draw_name, draw_health_bar
-from .fonts import _find_overlay_font, _ensure_raylib_font, _get_overlay_font_handle
-from .colors import resolve_color, health_color_hex
-from .visibility import resolve_local_index, is_visible_to_local
-
+from .colors import health_color_hex, resolve_color
+from .draw import (
+    draw_box,
+    draw_distance,
+    draw_health_bar,
+    draw_health_text,
+    draw_name,
+    draw_skeleton,
+)
+from .entity_list import entity_list_chunk_address, entity_slot_address
+from .fonts import _ensure_raylib_font, _find_overlay_font, _get_overlay_font_handle
+from .visibility import is_visible_to_local, resolve_local_index
 
 boneConnections = [
     ('head', 'neck_0'), ('neck_0', 'spine_1'), ('spine_1', 'spine_2'), ('spine_2', 'pelvis'),
@@ -38,7 +44,8 @@ def _neron_has_focus():
 
 
 def enforce_overlay_topmost():
-    import win32gui, win32con
+    import win32con
+    import win32gui
     try:
         hwnd = pme.get_window_handle()
         if hwnd and win32gui.IsWindow(hwnd):
@@ -96,30 +103,40 @@ def ESP_Update(processHandle, clientBaseAddress, Options, Offsets, SharedBombSta
     local_index = 0
     if EntityList and render_required:
         local_index = resolve_local_index(processHandle, EntityList, local_controller)
-        for i in range(64):
+        for i in range(1, 65):
             try:
-                list_entry = memfuncs.ProcMemHandler.ReadPointer(processHandle, EntityList + (8 * (i & 0x7FFF) >> 9) + 16)
+                chunk_address = entity_list_chunk_address(EntityList, i)
+                list_entry = memfuncs.ProcMemHandler.ReadPointer(processHandle, chunk_address)
                 if not list_entry:
                     continue
-                controller = memfuncs.ProcMemHandler.ReadPointer(processHandle, list_entry + 112 * (i & 0x1FF))
+                controller = memfuncs.ProcMemHandler.ReadPointer(
+                    processHandle, entity_slot_address(list_entry, i)
+                )
                 if not controller or controller == local_controller:
                     continue
                 pawnHandle = memfuncs.ProcMemHandler.ReadInt(processHandle, controller + Offsets.offset.m_hPlayerPawn)
                 if not pawnHandle:
                     continue
-                list_entry2 = memfuncs.ProcMemHandler.ReadPointer(processHandle, EntityList + 0x8 * ((pawnHandle & 0x7FFF) >> 9) + 0x10)
+                pawn_chunk_address = entity_list_chunk_address(EntityList, pawnHandle)
+                list_entry2 = memfuncs.ProcMemHandler.ReadPointer(processHandle, pawn_chunk_address)
                 if not list_entry2:
                     continue
-                pawn = memfuncs.ProcMemHandler.ReadPointer(processHandle, list_entry2 + 0x70 * (pawnHandle & 0x1FF))
+                pawn = memfuncs.ProcMemHandler.ReadPointer(
+                    processHandle, entity_slot_address(list_entry2, pawnHandle)
+                )
                 if not pawn or pawn == local_pawn:
                     continue
                 health = memfuncs.ProcMemHandler.ReadInt(processHandle, pawn + Offsets.offset.m_iHealth)
-                team = memfuncs.ProcMemHandler.ReadInt(processHandle, controller + Offsets.offset.m_iTeamNum)
+                team = memfuncs.ProcMemHandler.ReadInt(processHandle, pawn + Offsets.offset.m_iTeamNum)
                 lifeState = memfuncs.ProcMemHandler.ReadInt(processHandle, pawn + Offsets.offset.m_lifeState)
-                if lifeState != 256 or (opt_team_check and team == local_team):
+                if not 0 < health <= 100 or lifeState != 256 or (opt_team_check and team == local_team):
                     continue
                 sceneNode = memfuncs.ProcMemHandler.ReadPointer(processHandle, pawn + Offsets.offset.m_pGameSceneNode)
+                if not sceneNode:
+                    continue
                 boneMatrix = memfuncs.ProcMemHandler.ReadPointer(processHandle, sceneNode + Offsets.offset.m_modelState + 0x80)
+                if not boneMatrix:
+                    continue
                 origin = memfuncs.ProcMemHandler.ReadVec(processHandle, pawn + Offsets.offset.m_vOldOrigin)
                 head = memfuncs.ProcMemHandler.ReadVec(processHandle, boneMatrix + (6 * 32))
                 if calculations.distance_vec3(origin, local_origin) < 35:

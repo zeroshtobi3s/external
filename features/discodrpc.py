@@ -1,5 +1,7 @@
-from pypresence import Presence
 import time
+
+from pypresence import Presence
+
 
 def DiscordRpcThread(Options):
 	while True:

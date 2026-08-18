@@ -1,9 +1,8 @@
 import os
 import sys
-from typing import Optional
 
 
-def _is_truthy(value: Optional[str]) -> bool:
+def _is_truthy(value: str | None) -> bool:
     if value is None:
         return False
     value = value.strip().lower()

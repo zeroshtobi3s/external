@@ -1,8 +1,9 @@
-from functions import memfuncs
-from functions import logutil
-from functions.process_watcher import ProcessConnector
-import win32api
 import time
+
+import win32api
+
+from functions import entity_list, logutil, memfuncs
+from functions.process_watcher import ProcessConnector
 
 
 def Bhop_Update(processHandle, clientBaseAddress, Offsets):
@@ -16,8 +17,14 @@ def Bhop_Update(processHandle, clientBaseAddress, Offsets):
             return
 
         entityList = memfuncs.ProcMemHandler.ReadPointer(processHandle, clientBaseAddress + Offsets.offset.dwEntityList)
-        listEntry = memfuncs.ProcMemHandler.ReadPointer(processHandle, entityList + (0x8 * ((localPawn & 0x7FFF) >> 9) + 0x10))
-        localPawn = memfuncs.ProcMemHandler.ReadPointer(processHandle, listEntry + (112 * (localPawn & 0x1FF)))
+        listEntry = memfuncs.ProcMemHandler.ReadPointer(
+            processHandle, entity_list.entity_list_chunk_address(entityList, localPawn)
+        )
+        if not listEntry:
+            return
+        localPawn = memfuncs.ProcMemHandler.ReadPointer(
+            processHandle, entity_list.entity_slot_address(listEntry, localPawn)
+        )
 
         if localPawn:
             flags = memfuncs.ProcMemHandler.ReadInt(processHandle, localPawn + Offsets.offset.m_fFlags)
