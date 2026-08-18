@@ -11,6 +11,7 @@ from functions import (
     gameinput,
     logutil,
     memfuncs,
+    player_resolver,
 )
 
 
@@ -90,9 +91,6 @@ def GetPlayers(processHandle, clientBaseAddress, LocalPlayer, AimBoneID, Options
                 continue
 
             entity.Distance = calculations.distance_vec3(entity.origin, LocalPlayer.origin)
-            life_state = memfuncs.ProcMemHandler.ReadInt(
-                processHandle, pawn + Offsets.offset.m_lifeState
-            )
             spotted = memfuncs.ProcMemHandler.ReadInt(
                 processHandle,
                 pawn + Offsets.offset.m_entitySpottedState + Offsets.offset.m_bSpotted,
@@ -102,8 +100,6 @@ def GetPlayers(processHandle, clientBaseAddress, LocalPlayer, AimBoneID, Options
             )
 
             if Options["EnableAimbotVisibilityCheck"] and not spotted:
-                continue
-            if life_state != 256:
                 continue
             if Options["EnableAimbotTeamCheck"] and LocalPlayer.Team == team:
                 continue
@@ -134,14 +130,14 @@ def Aimbot_Update(processHandle, clientBaseAddress, Offsets, Options, ARDUINO_HA
         frame_time = current_time - _last_update_time
         _last_update_time = current_time
 
-        local_pawn = memfuncs.ProcMemHandler.ReadPointer(
-            processHandle, clientBaseAddress + Offsets.offset.dwLocalPlayerPawn
+        local_state = player_resolver.resolve_local_player(
+            processHandle, clientBaseAddress, Offsets.offset
         )
-        local_controller = memfuncs.ProcMemHandler.ReadPointer(
-            processHandle, clientBaseAddress + Offsets.offset.dwLocalPlayerController
-        )
-        if not is_valid_address(local_pawn) or not is_valid_address(local_controller):
+        if local_state is None:
             return
+        local_pawn = local_state.pawn
+        local_controller = local_state.controller
+        entity_list_address = local_state.entity_list
 
         local_team = memfuncs.ProcMemHandler.ReadInt(
             processHandle, local_pawn + Offsets.offset.m_iTeamNum
@@ -149,18 +145,9 @@ def Aimbot_Update(processHandle, clientBaseAddress, Offsets, Options, ARDUINO_HA
         local_origin = memfuncs.ProcMemHandler.ReadVec(
             processHandle, local_pawn + Offsets.offset.m_vOldOrigin
         )
-        local_view = memfuncs.ProcMemHandler.ReadVec(
-            processHandle, local_pawn + Offsets.offset.m_vecViewOffset
-        )
         view_matrix = memfuncs.ProcMemHandler.ReadMatrix(
             processHandle, clientBaseAddress + Offsets.offset.dwViewMatrix
         )
-        entity_list_address = memfuncs.ProcMemHandler.ReadPointer(
-            processHandle, clientBaseAddress + Offsets.offset.dwEntityList
-        )
-        if not is_valid_address(entity_list_address):
-            return
-
         aim_bone_id = ResolveBoneToID(Options.get("AimPosition", "Head"))
         best_entity_2d = None
         best_entity_3d = None
@@ -204,12 +191,6 @@ def Aimbot_Update(processHandle, clientBaseAddress, Offsets, Options, ARDUINO_HA
                     processHandle, entity_list.entity_slot_address(pawn_chunk, pawn_handle)
                 )
                 if not is_valid_address(pawn) or pawn == local_pawn:
-                    continue
-
-                life_state = memfuncs.ProcMemHandler.ReadInt(
-                    processHandle, pawn + Offsets.offset.m_lifeState
-                )
-                if life_state != 256:
                     continue
 
                 team = memfuncs.ProcMemHandler.ReadInt(

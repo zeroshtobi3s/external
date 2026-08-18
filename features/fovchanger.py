@@ -1,6 +1,6 @@
 import time
 
-from functions import logutil, memfuncs
+from functions import logutil, memfuncs, player_resolver
 from functions.process_watcher import ProcessConnector
 
 
@@ -25,12 +25,17 @@ def FovChangerThreadFunction(Options, Offsets):
                 time.sleep(0.01)
                 continue
 
-            local_pawn = memfuncs.ProcMemHandler.ReadPointer(process, client + Offsets.offset.dwLocalPlayerPawn)
-            if not local_pawn:
+            local_state = player_resolver.resolve_local_player(
+                process, client, Offsets.offset
+            )
+            if local_state is None:
                 time.sleep(0.005)
                 continue
 
-            camera_services = memfuncs.ProcMemHandler.ReadPointer(process, local_pawn + Offsets.offset.m_pCameraServices)
+            local_pawn = local_state.pawn
+            camera_services = memfuncs.ProcMemHandler.ReadPointer(
+                process, local_pawn + Offsets.offset.m_pCameraServices
+            )
             if not camera_services:
                 time.sleep(0.005)
                 continue

@@ -59,3 +59,14 @@ python -m compileall -q .
 ```
 
 Continuous integration runs the same syntax and unit-test checks on `windows-latest` for pushes and pull requests.
+
+### Runtime diagnostics
+
+If a feature does not respond during a Windows smoke test, run the application from PowerShell with debug output enabled and retain the complete console output:
+
+```powershell
+$env:NERON_DEBUG = "1"
+python main.py
+```
+
+The local-player resolver reports only when its resolution source changes. A line such as `[player-resolver] resolved via controller-handle` confirms that the shared memory acquisition path is available; `[player-resolver] local pawn could not be resolved` indicates that the console output should be attached to the bug report.
