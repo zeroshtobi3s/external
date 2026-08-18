@@ -172,7 +172,7 @@ def get_offsets() -> Offset:
         m_boneArray=128,
         m_nodeToWorld=client.get("CGameSceneNode", "m_nodeToWorld"),
         m_sSanitizedPlayerName=client.get(
-            "CBasePlayerController", "m_sSanitizedPlayerName"
+            "CCSPlayerController", "m_sSanitizedPlayerName"
         ),
         m_iIDEntIndex=client.get("C_CSPlayerPawn", "m_iIDEntIndex"),
         m_flFlashMaxAlpha=client.get("C_CSPlayerPawnBase", "m_flFlashMaxAlpha"),

@@ -1,6 +1,6 @@
 import globals
 from ext.datatypes import *
-from functions import calculations, memfuncs
+from functions import calculations, memfuncs, player_resolver
 
 try:
     import pymeow as pme
@@ -74,14 +74,24 @@ def ESP_Update(processHandle, clientBaseAddress, Options, Offsets, SharedBombSta
             pass
         return
 
+    local_state = player_resolver.resolve_local_player(
+        processHandle, clientBaseAddress, Offsets.offset
+    )
+    if local_state is None:
+        return
+
+    local_pawn = local_state.pawn
+    local_controller = local_state.controller
+    EntityList = local_state.entity_list
     try:
-        local_pawn = memfuncs.ProcMemHandler.ReadPointer(processHandle, clientBaseAddress + Offsets.offset.dwLocalPlayerPawn)
-        local_controller = memfuncs.ProcMemHandler.ReadPointer(processHandle, clientBaseAddress + Offsets.offset.dwLocalPlayerController)
-        local_team = memfuncs.ProcMemHandler.ReadInt(processHandle, local_pawn + Offsets.offset.m_iTeamNum)
-        local_origin = memfuncs.ProcMemHandler.ReadVec(processHandle, local_pawn + Offsets.offset.m_vOldOrigin)
-        EntityList = memfuncs.ProcMemHandler.ReadPointer(processHandle, clientBaseAddress + Offsets.offset.dwEntityList)
+        local_team = memfuncs.ProcMemHandler.ReadInt(
+            processHandle, local_pawn + Offsets.offset.m_iTeamNum
+        )
+        local_origin = memfuncs.ProcMemHandler.ReadVec(
+            processHandle, local_pawn + Offsets.offset.m_vOldOrigin
+        )
     except Exception:
-        EntityList = None
+        return
 
     # Gather toggles
     opt_box = Options.get("EnableESPBoxRendering", False)
@@ -128,8 +138,7 @@ def ESP_Update(processHandle, clientBaseAddress, Options, Offsets, SharedBombSta
                     continue
                 health = memfuncs.ProcMemHandler.ReadInt(processHandle, pawn + Offsets.offset.m_iHealth)
                 team = memfuncs.ProcMemHandler.ReadInt(processHandle, pawn + Offsets.offset.m_iTeamNum)
-                lifeState = memfuncs.ProcMemHandler.ReadInt(processHandle, pawn + Offsets.offset.m_lifeState)
-                if not 0 < health <= 100 or lifeState != 256 or (opt_team_check and team == local_team):
+                if not 0 < health <= 100 or (opt_team_check and team == local_team):
                     continue
                 sceneNode = memfuncs.ProcMemHandler.ReadPointer(processHandle, pawn + Offsets.offset.m_pGameSceneNode)
                 if not sceneNode:

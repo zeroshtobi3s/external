@@ -3,7 +3,7 @@ import time
 import win32api
 import win32gui
 
-from functions import entity_list, gameinput, logutil, memfuncs
+from functions import gameinput, logutil, memfuncs, player_resolver
 from functions.process_watcher import ProcessConnector
 
 
@@ -31,30 +31,21 @@ def TriggerbotThreadFunction(Options, Offsets):
                 time.sleep(0.005)
                 continue
 
-            local_pawn = memfuncs.ProcMemHandler.ReadPointer(process, client + Offsets.offset.dwLocalPlayerPawn)
-            if not local_pawn:
+            local_state = player_resolver.resolve_local_player(
+                process, client, Offsets.offset
+            )
+            if local_state is None:
                 time.sleep(0.002)
                 continue
+            local_pawn = local_state.pawn
 
             local_id = memfuncs.ProcMemHandler.ReadInt(process, local_pawn + Offsets.offset.m_iIDEntIndex)
             if local_id <= 0:
                 time.sleep(0.002)
                 continue
 
-            entlist = memfuncs.ProcMemHandler.ReadPointer(process, client + Offsets.offset.dwEntityList)
-            if not entlist:
-                time.sleep(0.002)
-                continue
-
-            entry = memfuncs.ProcMemHandler.ReadPointer(
-                process, entity_list.entity_list_chunk_address(entlist, local_id)
-            )
-            if not entry:
-                time.sleep(0.002)
-                continue
-
-            target = memfuncs.ProcMemHandler.ReadPointer(
-                process, entity_list.entity_slot_address(entry, local_id)
+            target = player_resolver.resolve_entity_handle(
+                process, local_state.entity_list, local_id
             )
             if not target:
                 time.sleep(0.002)

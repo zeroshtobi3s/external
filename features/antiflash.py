@@ -1,6 +1,6 @@
 import time
 
-from functions import logutil, memfuncs
+from functions import logutil, memfuncs, player_resolver
 from functions.process_watcher import ProcessConnector
 
 
@@ -14,11 +14,14 @@ def AntiFlashThreadFunction(Options, Offsets):
             process = connector.ensure_process()
             client = connector.ensure_module("client.dll")
 
-            local_pawn = memfuncs.ProcMemHandler.ReadPointer(process, client + Offsets.offset.dwLocalPlayerPawn)
-            if not local_pawn:
+            local_state = player_resolver.resolve_local_player(
+                process, client, Offsets.offset
+            )
+            if local_state is None:
                 time.sleep(0.005)
                 continue
 
+            local_pawn = local_state.pawn
             desired = 0.0 if Options.get("EnableAntiFlashbang", False) else 255.0
             if desired != last_value:
                 try:
