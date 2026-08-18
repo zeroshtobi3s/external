@@ -1,6 +1,8 @@
 import struct
+
 import pymem
 from pymem.process import module_from_name
+
 from ext.datatypes import *
 
 

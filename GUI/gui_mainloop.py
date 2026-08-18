@@ -1,13 +1,13 @@
-import dearpygui.dearpygui as dpg
-from functions import logutil
+import os
 import threading
 import time
-import win32api
-import win32gui
-import win32con
-import os
 
-from functions import fontpaths
+import dearpygui.dearpygui as dpg
+import win32api
+import win32con
+import win32gui
+
+from functions import fontpaths, logutil
 
 ROOT_TAG = "neron_root_window"
 
@@ -72,7 +72,7 @@ class NERON_GUI:
         r = max(0, min(255, r))
         g = max(0, min(255, g))
         b = max(0, min(255, b))
-        return '#{:02X}{:02X}{:02X}'.format(r, g, b)
+        return f'#{r:02X}{g:02X}{b:02X}'
 
     def _color_value_to_hex(self, value):
         if not isinstance(value, (list, tuple)) or len(value) < 3:

@@ -1,8 +1,9 @@
+import ctypes
+from pathlib import Path
+
 import win32api
 import win32gui
-import ctypes
-import os
-from pathlib import Path
+
 from ext import offsets
 from ext.datatypes import *
 

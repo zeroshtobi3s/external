@@ -1,8 +1,7 @@
-import time
 import os
-from functions import memfuncs
-from functions import fontpaths
-from functions import logutil
+import time
+
+from functions import entity_list, fontpaths, logutil, memfuncs
 from functions.process_watcher import ProcessConnector
 
 _SPEC_LOG_LEVEL = 0  
@@ -311,39 +310,29 @@ def read_controller_name(h, ctrl, off):
     return read_cstr_utf8(h, ctrl + off.m_sSanitizedPlayerName, 64) or "UNKNOWN"
 
 # ---------- resolvers ----------
-def ent_by_index_112(h, entlist_ptr, i):
-    entry2 = rd_ptr(h, entlist_ptr + 0x8 * (i >> 9) + 0x10)
-    if not entry2:
+def ent_by_index(h, entlist_ptr, index):
+    entry = rd_ptr(h, entity_list.entity_list_chunk_address(entlist_ptr, index))
+    if not entry:
         return 0
-    e = rd_ptr(h, entry2 + 112 * (i & 0x1FF))
-    return e if is_valid_ptr(e) else 0
+    entity = rd_ptr(h, entity_list.entity_slot_address(entry, index))
+    return entity if is_valid_ptr(entity) else 0
 
-def handle_to_ent_stride(h, entlist_ptr, handle, stride):
-    h32 = handle & 0xFFFFFFFF
-    if h32 == 0 or h32 == 0xFFFFFFFF:
+
+def handle_to_ent(h, entlist_ptr, handle):
+    handle32 = handle & 0xFFFFFFFF
+    if handle32 in (0, 0xFFFFFFFF):
         return 0
-    bucket = (h32 & 0x7FFF) >> 9
-    idx    = (h32 & 0x1FF)
-    entry2 = rd_ptr(h, entlist_ptr + 0x8 * bucket + 0x10)
-    if not entry2:
-        return 0
-    e = rd_ptr(h, entry2 + stride * idx)
-    return e if is_valid_ptr(e) else 0
+    return ent_by_index(h, entlist_ptr, handle32)
+
 
 def handle_to_ent_120(h, entlist_ptr, handle):
-    return handle_to_ent_stride(h, entlist_ptr, handle, 120)
+    """Compatibility alias retained for callers using the former function name."""
+    return handle_to_ent(h, entlist_ptr, handle)
 
-def handle_to_ent_112(h, entlist_ptr, handle):
-    return handle_to_ent_stride(h, entlist_ptr, handle, 112)
 
 def handle_to_ent_adaptive(h, entlist_ptr, handle):
-    e = handle_to_ent_120(h, entlist_ptr, handle)
-    if e:
-        return e, 120
-    e = handle_to_ent_112(h, entlist_ptr, handle)
-    if e:
-        return e, 112
-    return 0, 0
+    entity = handle_to_ent(h, entlist_ptr, handle)
+    return (entity, entity_list.ENTITY_LIST_ENTRY_STRIDE) if entity else (0, 0)
 
 def is_probably_pawn(h, ent_ptr, off):
     if not ent_ptr:
@@ -397,7 +386,7 @@ def resolve_local_pawn(h, client, off, entlist_ptr):
 
     if local_ctrl:
         for i in range(1, 64):
-            ctrl_i = ent_by_index_112(h, entlist_ptr, i)
+            ctrl_i = ent_by_index(h, entlist_ptr, i)
             if ctrl_i == local_ctrl:
                 hLP = rd_int(h, ctrl_i + off.m_hPlayerPawn)
                 lp4, s4 = handle_to_ent_adaptive(h, entlist_ptr, hLP)
@@ -502,7 +491,7 @@ def SpectatorThreadFunction(Options, Offsets, Runtime):
             scanned = had_handles = resolved_obs = matched = 0
 
             for i in range(1, MAX_ENTITIES):
-                ctrl = ent_by_index_112(hproc, entlist_ptr, i)
+                ctrl = ent_by_index(hproc, entlist_ptr, i)
                 if not ctrl:
                     continue
                 if ctrl == local_ctrl_ptr:  

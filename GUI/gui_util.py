@@ -1,5 +1,9 @@
 import ctypes
-import win32api, win32gui, win32con, win32process
+
+import win32api
+import win32con
+import win32gui
+import win32process
 
 from functions import logutil
 

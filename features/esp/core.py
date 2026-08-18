@@ -1,20 +1,25 @@
-from ext.datatypes import *
-from functions import memfuncs
-from functions import calculations
-from functions import logutil
 import globals
+from ext.datatypes import *
+from functions import calculations, memfuncs
+
 try:
     import pymeow as pme
 except ImportError:
     import pyMeow as pme
 from features import spectator
 
-from .draw import draw_box, draw_skeleton, draw_distance, draw_health_text, draw_name, draw_health_bar
-from .fonts import _find_overlay_font, _ensure_raylib_font, _get_overlay_font_handle
-from .colors import resolve_color, health_color_hex
+from .colors import health_color_hex, resolve_color
+from .draw import (
+    draw_box,
+    draw_distance,
+    draw_health_bar,
+    draw_health_text,
+    draw_name,
+    draw_skeleton,
+)
 from .entity_list import entity_list_chunk_address, entity_slot_address
-from .visibility import resolve_local_index, is_visible_to_local
-
+from .fonts import _ensure_raylib_font, _find_overlay_font, _get_overlay_font_handle
+from .visibility import is_visible_to_local, resolve_local_index
 
 boneConnections = [
     ('head', 'neck_0'), ('neck_0', 'spine_1'), ('spine_1', 'spine_2'), ('spine_2', 'pelvis'),
@@ -39,7 +44,8 @@ def _neron_has_focus():
 
 
 def enforce_overlay_topmost():
-    import win32gui, win32con
+    import win32con
+    import win32gui
     try:
         hwnd = pme.get_window_handle()
         if hwnd and win32gui.IsWindow(hwnd):

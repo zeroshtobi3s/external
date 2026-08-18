@@ -1,33 +1,31 @@
-import globals
-from functions import config_store
-from functions import logutil
-
-from features import aimbot
-from features import rcs
-from features import esp
-from features import bombtimer
-from features import fovchanger
-from features import antiflash
-from features import triggerbot
-from features import bhop
-from features import discodrpc
-from features import spectator
-
-from GUI import gui_mainloop
-from GUI import gui_util
-
 import multiprocessing
+import os
+import threading
 import time
 
+import keyboard
 import serial
 import serial.tools.list_ports
+import win32api
+import win32con
+import win32process
 
-import win32con, win32process, win32api
-import keyboard, os
-
+import globals
+from features import (
+    aimbot,
+    antiflash,
+    bhop,
+    bombtimer,
+    discodrpc,
+    esp,
+    fovchanger,
+    rcs,
+    spectator,
+    triggerbot,
+)
+from functions import config_store, logutil
 from functions.process_watcher import ProcessConnector
-
-import threading
+from GUI import gui_mainloop, gui_util
 
 
 def register_hotkeys():

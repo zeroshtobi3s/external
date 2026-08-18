@@ -1,8 +1,8 @@
-from ext.datatypes import *
-from functions import memfuncs, gameinput
-from functions import logutil
-import globals
 import win32gui
+
+import globals
+from ext.datatypes import *
+from functions import gameinput, logutil, memfuncs
 
 oldPunch_x = 0.0
 oldPunch_y = 0.0

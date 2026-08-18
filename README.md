@@ -48,3 +48,14 @@ Offsets are fetched at runtime from the CS2 dumper repo; if the request fails, p
 
 ## License & Credits
 Crafted by [SadraKhorami](https://github.com/SadraKhorami). Visit the official site: [khorami.dev](https://khorami.dev). If this project helps you, please star the repository to support ongoing work.
+
+## Development checks
+
+Run the following commands from the repository root before opening a pull request. The unit tests cover configuration persistence, offset cache fallback, entity-list address calculation, aim-position mapping, and process reconnection behavior without requiring a running game session.
+
+```powershell
+python -m unittest discover -s tests -v
+python -m compileall -q .
+```
+
+Continuous integration runs the same syntax and unit-test checks on `windows-latest` for pushes and pull requests.

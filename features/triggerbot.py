@@ -1,9 +1,10 @@
-from functions import memfuncs
-from functions import gameinput
-from functions import logutil
-from functions.process_watcher import ProcessConnector
-import win32api, win32gui
 import time
+
+import win32api
+import win32gui
+
+from functions import entity_list, gameinput, logutil, memfuncs
+from functions.process_watcher import ProcessConnector
 
 
 def TriggerbotThreadFunction(Options, Offsets):
@@ -45,12 +46,16 @@ def TriggerbotThreadFunction(Options, Offsets):
                 time.sleep(0.002)
                 continue
 
-            entry = memfuncs.ProcMemHandler.ReadPointer(process, entlist + 0x8 * (local_id >> 9) + 0x10)
+            entry = memfuncs.ProcMemHandler.ReadPointer(
+                process, entity_list.entity_list_chunk_address(entlist, local_id)
+            )
             if not entry:
                 time.sleep(0.002)
                 continue
 
-            target = memfuncs.ProcMemHandler.ReadPointer(process, entry + 112 * (local_id & 0x1FF))
+            target = memfuncs.ProcMemHandler.ReadPointer(
+                process, entity_list.entity_slot_address(entry, local_id)
+            )
             if not target:
                 time.sleep(0.002)
                 continue

@@ -1,6 +1,7 @@
 import os
-from functions import fontpaths
-from functions import logutil
+
+from functions import fontpaths, logutil
+
 try:
     import pymeow as pme
 except ImportError:
